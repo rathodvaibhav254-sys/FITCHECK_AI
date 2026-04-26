@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>StyleSense — AI Outfit Advisor</title>
+<meta name="description" content="AI-powered outfit classifier and style advisor. Get personalized outfit suggestions for college, party, outing, and more."/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+--bg:#0f0e17;--bg2:#1a1829;--card:#1e1d2e;--card2:#252438;
+--text:#fffffe;--muted:#a7a4c0;--border:#2e2c45;
+--accent:#7c3aed;--accent2:#f59e0b;--accent3:#ec4899;
+--glass:rgba(30,29,46,0.7);--blur:blur(20px);
+--success:#10b981;--warn:#f59e0b;--bad:#ef4444;
+--r:14px;--trans:0.22s ease;
+}
+[data-theme="light"]{
+--bg:#f8f7ff;--bg2:#ede9fe;--card:#fff;--card2:#f3f0ff;
+--text:#1a1829;--muted:#6b7280;--border:#e0d9f7;
+--glass:rgba(255,255,255,0.75);
+}
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;transition:background var(--trans),color var(--trans)}
+/* ---- SCROLLBAR ---- */
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg2)}::-webkit-scrollbar-thumb{background:var(--accent);border-radius:99px}
+/* ---- HEADER ---- */
+header{padding:1rem 2rem;display:flex;align-items:center;gap:1rem;background:var(--glass);backdrop-filter:var(--blur);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:.75rem}
+.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--accent),var(--accent3));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px}
+.logo h1{font-family:'Inter',sans-serif;font-size:1.4rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent3));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.logo p{font-size:.75rem;color:var(--muted);margin-top:1px}
+.header-actions{margin-left:auto;display:flex;align-items:center;gap:1rem}
+.theme-btn{background:var(--card);border:1px solid var(--border);color:var(--text);width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all var(--trans)}
+.theme-btn:hover{background:var(--accent);border-color:var(--accent)}
+.badge-saved{background:var(--accent);color:#fff;font-size:.7rem;font-weight:600;padding:2px 8px;border-radius:99px}
+/* ---- TABS ---- */
+.tabs{display:flex;gap:4px;padding:.75rem 2rem;background:var(--bg);border-bottom:1px solid var(--border);overflow-x:auto}
+.tab{padding:.55rem 1.2rem;border-radius:10px;border:none;background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:.88rem;font-weight:500;cursor:pointer;transition:all var(--trans);white-space:nowrap;display:flex;align-items:center;gap:.4rem}
+.tab:hover{background:var(--card);color:var(--text)}
+.tab.active{background:linear-gradient(135deg,var(--accent),var(--accent3));color:#fff;box-shadow:0 4px 15px rgba(124,58,237,.35)}
+/* ---- MAIN ---- */
+main{flex:1;padding:1.5rem 2rem 3rem;max-width:1200px;margin:0 auto;width:100%}
+.tab-pane{display:none;animation:fadeUp .35s ease}
+.tab-pane.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+/* ---- CARDS ---- */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.card-header{padding:1.1rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.6rem}
+.card-header h2{font-family:'Inter',sans-serif;font-size:1rem;font-weight:600}
+.card-body{padding:1.4rem}
+/* ---- GRID LAYOUTS ---- */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:768px){.two-col{grid-template-columns:1fr}.tabs{padding:.75rem 1rem}main{padding:1rem 1rem 2rem}}
+/* ---- OCCASION GRID ---- */
+.oc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-bottom:1.2rem}
+@media(max-width:600px){.oc-grid{grid-template-columns:repeat(3,1fr)}}
+.oc-btn{border:1.5px solid var(--border);background:transparent;border-radius:10px;padding:.65rem .4rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.72rem;color:var(--text);transition:all var(--trans);text-align:center;line-height:1.3}
+.oc-btn .oi{font-size:22px;display:block;margin-bottom:3px}
+.oc-btn:hover{border-color:var(--accent);background:rgba(124,58,237,.12)}
+.oc-btn.active{border-color:var(--accent);background:rgba(124,58,237,.2);color:var(--accent);font-weight:500}
+/* ---- WEBCAM ---- */
+#webcam-wrap{background:linear-gradient(135deg,#1a1829,#0f0e17);border-radius:12px;min-height:260px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+[data-theme="light"] #webcam-wrap{background:linear-gradient(135deg,#ede9fe,#f8f7ff)}
+#webcam-wrap canvas{border-radius:12px;max-width:100%}
+.ph{text-align:center;color:var(--muted);padding:2rem}
+.ph .pi{font-size:52px;margin-bottom:.75rem}
+.scan-ring{position:absolute;top:50%;left:50%;width:110px;height:110px;border:2px dashed var(--accent);border-radius:50%;transform:translate(-50%,-50%);animation:spin 4s linear infinite;opacity:0;pointer-events:none}
+.scanning .scan-ring{opacity:.5}
+@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+/* ---- BUTTONS ---- */
+.btn{padding:.7rem 1.4rem;border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:.9rem;font-weight:500;cursor:pointer;transition:all var(--trans);display:inline-flex;align-items:center;gap:.5rem}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent3));color:#fff;box-shadow:0 4px 15px rgba(124,58,237,.3)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(124,58,237,.45)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:.4rem .9rem;font-size:.8rem}
+.btn-full{width:100%;justify-content:center;margin-top:1rem}
+/* ---- STATUS BADGE ---- */
+.status{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;padding:3px 10px;border-radius:99px}
+.status.live{background:rgba(16,185,129,.15);color:var(--success)}
+.status.idle{background:var(--card2);color:var(--muted)}
+.status .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.status.live .dot{animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+/* ---- VERDICT ---- */
+.verdict{border-radius:12px;padding:1.1rem;margin-bottom:1rem;display:flex;gap:12px}
+.v-icon{font-size:30px;flex-shrink:0}
+.v-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;font-weight:600;margin-bottom:3px}
+.v-title{font-family:'Inter',sans-serif;font-size:1.2rem;font-weight:700;margin-bottom:4px}
+.v-sub{font-size:.84rem;line-height:1.55}
+.v-perfect{background:rgba(16,185,129,.12);color:var(--success)}
+.v-good{background:rgba(245,158,11,.12);color:var(--warn)}
+.v-bad{background:rgba(239,68,68,.12);color:var(--bad)}
+/* ---- CONF BARS ---- */
+.conf-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:1rem 0 .6rem;font-weight:600}
+.conf-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.conf-name{font-size:.8rem;min-width:120px}
+.conf-track{flex:1;height:5px;background:var(--card2);border-radius:99px;overflow:hidden}
+.conf-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent3));border-radius:99px;transition:width .5s ease}
+.conf-pct{font-size:.75rem;color:var(--muted);min-width:34px;text-align:right}
+/* ---- TIP CARD ---- */
+.tip{background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(236,72,153,.08));border:1px solid rgba(124,58,237,.25);border-radius:10px;padding:.9rem 1rem;margin-top:.9rem}
+.tip-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);font-weight:600;margin-bottom:5px}
+.tip-text{font-size:.84rem;line-height:1.6;color:var(--text)}
+/* ---- UPLOAD ---- */
+.upload-zone{border:2px dashed var(--border);border-radius:12px;padding:1.5rem;text-align:center;cursor:pointer;transition:all var(--trans);margin-top:1rem}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:rgba(124,58,237,.07)}
+.upload-zone p{font-size:.84rem;color:var(--muted);margin-top:.4rem}
+#file-input{display:none}
+#preview-img{max-width:100%;border-radius:10px;margin-top:.75rem;display:none}
+/* ---- FILTER BAR ---- */
+.filter-bar{display:flex;flex-wrap:wrap;gap:.75rem;margin-bottom:1.5rem;align-items:flex-end}
+.filter-group{display:flex;flex-direction:column;gap:.4rem;min-width:140px}
+.filter-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.filter-select{background:var(--card);border:1px solid var(--border);color:var(--text);padding:.55rem .9rem;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:.85rem;cursor:pointer;transition:border-color var(--trans)}
+.filter-select:focus{outline:none;border-color:var(--accent)}
+/* ---- OUTFIT CARDS ---- */
+.outfit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:1.2rem}
+.outfit-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;transition:all var(--trans);cursor:pointer}
+.outfit-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.35);border-color:var(--accent)}
+.outfit-img{height:200px;display:flex;align-items:center;justify-content:center;font-size:72px;position:relative;overflow:hidden}
+.outfit-img img {position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:0;}
+.outfit-img .grad{position:absolute;inset:0;z-index:1;}
+.outfit-tag{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);color:#fff;font-size:.68rem;padding:3px 9px;border-radius:99px;z-index:2;}
+.outfit-info{padding:1rem}
+.outfit-name{font-family:'Inter',sans-serif;font-size:.95rem;font-weight:600;margin-bottom:.5rem}
+.outfit-items{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.65rem}
+.item-chip{background:var(--card2);border:1px solid var(--border);font-size:.7rem;padding:2px 8px;border-radius:99px;color:var(--muted)}
+.color-dots{display:flex;gap:5px;margin-bottom:.65rem}
+.cdot{width:18px;height:18px;border-radius:50%;border:2px solid var(--border)}
+.outfit-actions{display:flex;gap:.5rem}
+/* ---- LOOKBOOK ---- */
+.lookbook-filters{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.4rem}
+.lf-btn{padding:.4rem 1rem;border-radius:99px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-size:.78rem;cursor:pointer;transition:all var(--trans)}
+.lf-btn.active,.lf-btn:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+/* ---- SAVED ---- */
+.saved-empty{text-align:center;padding:4rem 2rem;color:var(--muted)}
+.saved-empty .se-icon{font-size:60px;margin-bottom:1rem}
+/* ---- EMPTY STATE ---- */
+.empty{text-align:center;padding:3rem 1rem;color:var(--muted)}
+.empty .ei{font-size:52px;margin-bottom:.75rem}
+.empty p{font-size:.88rem;line-height:1.6}
+/* ---- LOADING ---- */
+.dots{display:inline-flex;gap:3px}
+.dots span{width:5px;height:5px;background:#fff;border-radius:50%;animation:d 1.2s infinite}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+@keyframes d{0%,80%,100%{opacity:.25}40%{opacity:1}}
+/* ---- TOAST ---- */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--accent);color:#fff;padding:.7rem 1.2rem;border-radius:10px;font-size:.85rem;font-weight:500;z-index:999;opacity:0;transform:translateY(10px);transition:all .3s ease;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+/* ---- SECTION TITLE ---- */
+.section-title{font-family:'Inter',sans-serif;font-size:1.4rem;font-weight:700;margin-bottom:.35rem}
+.section-sub{font-size:.88rem;color:var(--muted);margin-bottom:1.5rem}
+/* ---- SCORE RING ---- */
+.score-ring-wrap{display:flex;flex-direction:column;align-items:center;gap:.3rem}
+.score-ring{width:70px;height:70px}
+.score-ring circle{fill:none;stroke-width:6;cx:35;cy:35;r:30}
+.ring-bg{stroke:var(--border)}
+.ring-fg{stroke:url(#ringGrad);stroke-linecap:round;transition:stroke-dashoffset .8s ease;transform:rotate(-90deg);transform-origin:center}
+.ring-label{font-family:'Inter',sans-serif;font-size:.65rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+footer{text-align:center;padding:1.2rem;font-size:.75rem;color:var(--muted);border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-icon">✦</div>
+    <div>
+      <h1>StyleSense</h1>
+      <p>AI Outfit Advisor</p>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span id="saved-count" class="badge-saved" style="display:none">0 saved</span>
+    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" onclick="switchTab('classify',this)">📷 Classify Outfit</button>
+  <button class="tab" onclick="switchTab('suggest',this)">💡 Outfit Suggestions</button>
+  <button class="tab" onclick="switchTab('lookbook',this)">👗 Lookbook</button>
+  <button class="tab" onclick="switchTab('saved',this)">❤️ Saved Looks</button>
+</nav>
+
+<main>
+
+<!-- TAB 1: CLASSIFY -->
+<div class="tab-pane active" id="tab-classify">
+  <div class="two-col">
+    <div class="card">
+      <div class="card-header">
+        <span>📷</span><h2>Scan Your Outfit</h2>
+        <span id="status-badge" class="status idle" style="margin-left:auto"><span class="dot"></span> Ready</span>
+      </div>
+      <div class="card-body">
+        <div class="filter-label" style="margin-bottom:.6rem">Select occasion</div>
+        <div class="oc-grid" id="occ-classify">
+          <button class="oc-btn active" data-occ="casual" onclick="pickOcc(this,'classify')"><span class="oi">👕</span>Casual</button>
+          <button class="oc-btn" data-occ="college" onclick="pickOcc(this,'classify')"><span class="oi">🎓</span>College</button>
+          <button class="oc-btn" data-occ="party" onclick="pickOcc(this,'classify')"><span class="oi">🎉</span>Party</button>
+          <button class="oc-btn" data-occ="outing" onclick="pickOcc(this,'classify')"><span class="oi">🌳</span>Outing</button>
+          <button class="oc-btn" data-occ="formal" onclick="pickOcc(this,'classify')"><span class="oi">👔</span>Formal</button>
+          <button class="oc-btn" data-occ="date" onclick="pickOcc(this,'classify')"><span class="oi">🌹</span>Date Night</button>
+          <button class="oc-btn" data-occ="wedding" onclick="pickOcc(this,'classify')"><span class="oi">💒</span>Wedding</button>
+          <button class="oc-btn" data-occ="festive" onclick="pickOcc(this,'classify')"><span class="oi">🪔</span>Festive</button>
+        </div>
+
+        <div id="webcam-wrap">
+          <div class="scan-ring"></div>
+          <div class="ph"><div class="pi">🪞</div><p>Camera preview will appear here</p></div>
+        </div>
+
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
+          <div style="font-size:28px">📂</div>
+          <p>Or drag & drop / click to upload a photo</p>
+          <input type="file" id="file-input" accept="image/*" onchange="handleUpload(event)"/>
+        </div>
+        <img id="preview-img" alt="Uploaded preview"/>
+
+        <div style="display:flex;gap:.6rem;margin-top:1rem">
+          <button class="btn btn-primary btn-full" id="startBtn" onclick="initCamera()" style="flex:1">
+            <span>✦</span> Start Camera & Analyze
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span>✦</span><h2>Style Verdict</h2></div>
+      <div class="card-body" id="result-panel">
+        <div class="empty"><div class="ei">🪄</div><p>Your AI style verdict will appear here once the camera is active or you upload a photo.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2: SUGGESTIONS -->
+<div class="tab-pane" id="tab-suggest">
+  <div class="section-title">Outfit Suggestions</div>
+  <div class="section-sub">Tell us the vibe and we'll show you what to wear 🎨</div>
+
+  <div class="filter-bar">
+    <div class="filter-group">
+      <div class="filter-label">Occasion</div>
+      <select class="filter-select" id="s-occ">
+        <option value="casual">Casual</option>
+        <option value="college">College / Campus</option>
+        <option value="party">Party</option>
+        <option value="outing">Outing / Travel</option>
+        <option value="formal">Formal / Office</option>
+        <option value="date">Date Night</option>
+        <option value="wedding">Wedding</option>
+        <option value="festive">Festive / Cultural</option>
+        <option value="gym">Gym / Workout</option>
+        <option value="beach">Beach / Vacation</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Style</div>
+      <select class="filter-select" id="s-gender">
+        <option value="men">Men</option>
+        <option value="women">Women</option>
+        <option value="unisex">Unisex</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Season</div>
+      <select class="filter-select" id="s-season">
+        <option value="all">All Seasons</option>
+        <option value="summer">Summer</option>
+        <option value="winter">Winter</option>
+        <option value="monsoon">Monsoon / Rainy</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="getSuggestions()" style="align-self:flex-end">✨ Get Suggestions</button>
+  </div>
+
+  <div id="suggestions-grid" class="outfit-grid">
+    <div class="empty" style="grid-column:1/-1"><div class="ei">👗</div><p>Select your preferences above and click "Get Suggestions" to see outfit ideas!</p></div>
+  </div>
+</div>
+
+<!-- TAB 3: LOOKBOOK -->
+<div class="tab-pane" id="tab-lookbook">
+  <div class="section-title">Lookbook Gallery</div>
+  <div class="section-sub">Browse curated outfit inspiration — filter by occasion 🔍</div>
+  <div class="lookbook-filters" id="lb-filters">
+    <button class="lf-btn active" data-f="all" onclick="filterLookbook(this)">All</button>
+    <button class="lf-btn" data-f="casual" onclick="filterLookbook(this)">Casual</button>
+    <button class="lf-btn" data-f="college" onclick="filterLookbook(this)">College</button>
+    <button class="lf-btn" data-f="party" onclick="filterLookbook(this)">Party</button>
+    <button class="lf-btn" data-f="outing" onclick="filterLookbook(this)">Outing</button>
+    <button class="lf-btn" data-f="formal" onclick="filterLookbook(this)">Formal</button>
+    <button class="lf-btn" data-f="date" onclick="filterLookbook(this)">Date Night</button>
+    <button class="lf-btn" data-f="festive" onclick="filterLookbook(this)">Festive</button>
+    <button class="lf-btn" data-f="beach" onclick="filterLookbook(this)">Beach</button>
+    <button class="lf-btn" data-f="gym" onclick="filterLookbook(this)">Gym</button>
+  </div>
+  <div id="lookbook-grid" class="outfit-grid"></div>
+</div>
+
+<!-- TAB 4: SAVED -->
+<div class="tab-pane" id="tab-saved">
+  <div class="section-title">Saved Looks ❤️</div>
+  <div class="section-sub">Your favourite outfits in one place</div>
+  <div id="saved-grid" class="outfit-grid"></div>
+</div>
+
+</main>
+<footer>StyleSense · Powered by Teachable Machine & TensorFlow.js · Your style, perfected ✦</footer>
+<div class="toast" id="toast"></div>
+
+<svg width="0" height="0">
+  <defs>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7c3aed"/>
+      <stop offset="100%" style="stop-color:#ec4899"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<script>
+/* ---- DB: 40+ OUTFITS ---- */
+let db = [];
+let savedLookIds = [];
+
+async function fetchDb() {
+  try {
+    const res = await fetch('http://localhost:3000/api/outfits');
+    db = await res.json();
+    renderLookbook();
+  } catch (e) {
+    console.error("Failed to fetch db", e);
+  }
+}
+
+async function fetchSaved() {
+  try {
+    const res = await fetch('http://localhost:3000/api/saved');
+    savedLookIds = await res.json();
+    updateBadge();
+    updateSaveBtns();
+  } catch (e) {
+    console.error("Failed to fetch saved looks", e);
+  }
+}
+
+const MODEL_URL = "https://teachablemachine.withgoogle.com/models/sIR91DjYJ/";
+let model, webcam, maxPred, isLive = false;
+let selClassifyOcc = "casual";
+
+const OCC_TIPS = {
+  casual:"Keep it relaxed with breathable fabrics. Fit is more important than flash.",
+  college:"Balance comfort for long lectures with a hint of personal style.",
+  party:"Don't be afraid of bold textures, metallics, or statement pieces.",
+  outing:"Prioritize comfortable footwear and layered clothing for changing temps.",
+  formal:"Stick to a tailored fit, neutral colors, and keep accessories minimal.",
+  date:"Show effort without looking overly stiff. A spritz of good fragrance helps.",
+  wedding:"Never upstage the couple. Avoid white; lean into elegant pastels or deep jewel tones.",
+  festive:"Embrace rich colors and traditional fabrics. Accessories make the look.",
+  gym:"Moisture-wicking fabrics and proper supportive shoes are key.",
+  beach:"Linen, cotton, and bright airy colors work best under the sun."
+};
+
+/* --- THEME --- */
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.getElementById('themeBtn').innerText = isDark ? '☀️' : '🌙';
+  localStorage.setItem('ss_theme', isDark ? 'light' : 'dark');
+}
+if(localStorage.getItem('ss_theme') === 'light') toggleTheme();
+
+/* --- TABS --- */
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tabId).classList.add('active');
+  if(tabId === 'lookbook') renderLookbook();
+  if(tabId === 'saved') renderSaved();
+}
+
+/* --- TOAST --- */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.innerText = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+/* --- CLASSIFY LOGIC --- */
+function pickOcc(btn, ctx) {
+  document.querySelectorAll(`#occ-${ctx} .oc-btn`).forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if(ctx === 'classify') {
+    selClassifyOcc = btn.dataset.occ;
+    if(document.getElementById('preview-img').src) runPrediction(document.getElementById('preview-img'));
+  }
+}
+
+async function loadModel() {
+  if(model) return;
+  model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+  maxPred = model.getTotalClasses();
+}
+
+async function initCamera() {
+  const btn = document.getElementById('startBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<div class="dots"><span></span><span></span><span></span></div> Loading AI…`;
+
+  try {
+    await loadModel();
+    const flip = true;
+    webcam = new tmImage.Webcam(300, 300, flip);
+    await webcam.setup();
+    await webcam.play();
+
+    const wrap = document.getElementById('webcam-wrap');
+    wrap.innerHTML = '<div class="scan-ring"></div>';
+    wrap.appendChild(webcam.canvas);
+    wrap.classList.add('scanning');
+
+    document.getElementById('status-badge').className = 'status live';
+    document.getElementById('status-badge').innerHTML = '<span class="dot"></span> Live AI';
+
+    btn.innerHTML = '⏹ Stop Camera';
+    btn.onclick = stopCamera;
+    btn.disabled = false;
+    
+    // hide upload img if present
+    document.getElementById('preview-img').style.display = 'none';
+
+    isLive = true;
+    window.requestAnimationFrame(camLoop);
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<span>✦</span> Retry Camera';
+    showToast("Error loading model or camera permissions denied.");
+    console.error(e);
+  }
+}
+
+function stopCamera() {
+  isLive = false;
+  if(webcam) webcam.stop();
+  const wrap = document.getElementById('webcam-wrap');
+  wrap.classList.remove('scanning');
+  wrap.innerHTML = `<div class="scan-ring"></div><div class="ph"><div class="pi">🪞</div><p>Camera stopped.</p></div>`;
+  
+  document.getElementById('status-badge').className = 'status idle';
+  document.getElementById('status-badge').innerHTML = '<span class="dot"></span> Ready';
+  
+  const btn = document.getElementById('startBtn');
+  btn.innerHTML = '<span>✦</span> Start Camera & Analyze';
+  btn.onclick = initCamera;
+}
+
+async function camLoop() {
+  if(!isLive) return;
+  webcam.update();
+  await runPrediction(webcam.canvas);
+  window.requestAnimationFrame(camLoop);
+}
+
+/* --- IMAGE UPLOAD LOGIC --- */
+function handleUpload(e) {
+  if(e.target.files && e.target.files[0]) {
+    processImageFile(e.target.files[0]);
+  }
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag');
+  if(e.dataTransfer.files && e.dataTransfer.files[0]) {
+    processImageFile(e.dataTransfer.files[0]);
+  }
+}
+
+function processImageFile(file) {
+  if(isLive) stopCamera(); // stop cam if running
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const img = document.getElementById('preview-img');
+    img.src = e.target.result;
+    img.style.display = 'block';
+    
+    // show loading verdict
+    document.getElementById('result-panel').innerHTML = `<div class="empty"><div class="dots" style="margin-bottom:1rem"><span></span><span></span><span></span></div><p>Analyzing uploaded photo...</p></div>`;
+    
+    await loadModel();
+    // need to wait for img to load fully into dom before predict
+    img.onload = () => { runPrediction(img); }
+  }
+  reader.readAsDataURL(file);
+}
+
+async function runPrediction(imgEl) {
+  if(!model) return;
+  const pred = await model.predict(imgEl);
+  renderResults(pred);
+}
+
+function getCompatibility(className, occasion) {
+  const c = className.toLowerCase();
+  const o = occasion.toLowerCase();
+  
+  const casualItems = ['tshirt', 't-shirt', 'tee', 'casual', 'hoodie', 'sweat', 'jean', 'short'];
+  const formalItems = ['formal', 'suit', 'tux', 'blazer', 'tie', 'dress shirt'];
+  
+  const isCasual = casualItems.some(item => c.includes(item));
+  const isFormal = formalItems.some(item => c.includes(item));
+  
+  if (o === 'formal' || o === 'wedding') {
+    if (isCasual) return 0.2; // Bad match
+    if (isFormal) return 0.95; // Perfect match
+    return 0.5; // Neutral
+  }
+  
+  if (o === 'casual' || o === 'college' || o === 'outing') {
+    if (isFormal) return 0.3; // Overdressed
+    if (isCasual) return 0.95; // Perfect match
+    return 0.8; // Generally ok
+  }
+  
+  if (o === 'party' || o === 'date' || o === 'festive') {
+    if (isCasual) return 0.4; // Underdressed
+    if (isFormal) return 0.8; // Safe bet
+    return 0.7; 
+  }
+  
+  if (o === 'gym') {
+    if (isFormal) return 0.1;
+    if (isCasual) return 0.8;
+    return 0.6;
+  }
+  
+  if (o === 'beach') {
+    if (isFormal) return 0.1;
+    if (isCasual) return 0.9;
+    return 0.6;
+  }
+  
+  return 0.7; // fallback
+}
+
+function renderResults(preds) {
+  const sorted = [...preds].sort((a,b) => b.probability - a.probability);
+  
+  // Find all items that the AI is reasonably confident about (> 15%)
+  const detectedItems = sorted.filter(p => p.probability > 0.15);
+  const topItems = detectedItems.length > 0 ? detectedItems : [sorted[0]];
+  
+  const topNames = topItems.map(p => `"${p.className}"`).join(" and ");
+  
+  // Use the primary item for base compatibility, but add bonuses if other matching items are detected
+  const primary = topItems[0];
+  const conf = primary.probability;
+  const occName = selClassifyOcc.charAt(0).toUpperCase() + selClassifyOcc.slice(1);
+  const tip = OCC_TIPS[selClassifyOcc] || "Dress to feel confident and comfortable.";
+
+  // Calculate actual compatibility score based on primary item
+  let compatFactor = getCompatibility(primary.className, selClassifyOcc);
+  
+  // If a secondary item is also detected and matches the occasion well, boost the score
+  if (topItems.length > 1) {
+    const secondCompat = getCompatibility(topItems[1].className, selClassifyOcc);
+    if (secondCompat > 0.8) compatFactor = Math.min(1.0, compatFactor + 0.2);
+  }
+  
+  const score = compatFactor * (conf > 0.5 ? 1 : 0.5);
+
+  let vClass, vIcon, vLabel, vTitle, vSub;
+  if (score >= 0.70) {
+    vClass = 'v-perfect'; vIcon = '✅'; vLabel = 'Perfect Match';
+    vTitle = `Great for ${occName}!`;
+    vSub = `Detected ${topNames}. This is an excellent fit.`;
+  } else if (score >= 0.45) {
+    vClass = 'v-good'; vIcon = '⚠️'; vLabel = 'Almost There';
+    vTitle = `Could work for ${occName}`;
+    vSub = `Detected ${topNames}. Might need some styling tweaks for ${occName}.`;
+  } else {
+    vClass = 'v-bad'; vIcon = '❌'; vLabel = 'Mismatch';
+    vTitle = `Not ideal for ${occName}`;
+    vSub = `Detected ${topNames}. This is generally too casual or inappropriate for a ${occName} setting.`;
+  }
+
+  const bars = sorted.slice(0,3).map(p => `
+    <div class="conf-row">
+      <span class="conf-name">${p.className}</span>
+      <div class="conf-track"><div class="conf-fill" style="width:${(p.probability*100)}%"></div></div>
+      <span class="conf-pct">${(p.probability*100).toFixed(0)}%</span>
+    </div>
+  `).join('');
+
+  // Use score for the circle but bound it nicely
+  const displayScore = Math.max(0.1, score);
+  const ringDash = 188.4; // 2 * pi * 30
+  const ringOffset = ringDash - (displayScore * ringDash);
+
+  document.getElementById('result-panel').innerHTML = `
+    <div class="verdict ${vClass}">
+      <div class="v-icon">${vIcon}</div>
+      <div style="flex:1">
+        <div class="v-label">${vLabel}</div>
+        <div class="v-title">${vTitle}</div>
+        <div class="v-sub">${vSub}</div>
+      </div>
+      <div class="score-ring-wrap">
+        <svg class="score-ring"><circle class="ring-bg"/><circle class="ring-fg" stroke-dasharray="188.4" stroke-dashoffset="${ringOffset}"/></svg>
+        <span class="ring-label">Match</span>
+      </div>
+    </div>
+    <div class="conf-title">AI Confidence (What the camera sees)</div>
+    ${bars}
+    <div class="tip">
+      <div class="tip-label">✦ Stylist Tip for ${occName}</div>
+      <div class="tip-text">${tip}</div>
+    </div>
+  `;
+}
+
+/* --- SUGGESTIONS --- */
+function getSuggestions() {
+  const occ = document.getElementById('s-occ').value;
+  const g = document.getElementById('s-gender').value;
+  const s = document.getElementById('s-season').value;
+  
+  let res = db.filter(o => {
+    let mOcc = o.occ === occ;
+    let mG = (g === 'unisex' || o.g === 'unisex' || o.g === g);
+    let mS = (s === 'all' || o.s === 'all' || o.s === s);
+    return mOcc && mG && mS;
+  });
+  
+  // if strict filter fails, fallback to occasion only
+  if(res.length === 0) res = db.filter(o => o.occ === occ).slice(0,6);
+  
+  const grid = document.getElementById('suggestions-grid');
+  grid.innerHTML = '';
+  if(res.length === 0) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="ei">🏜️</div><p>No matches found. Try changing filters.</p></div>`;
+    return;
+  }
+  
+  res.forEach(item => {
+    grid.innerHTML += buildOutfitCard(item);
+  });
+}
+
+/* --- LOOKBOOK --- */
+function filterLookbook(btn) {
+  document.querySelectorAll('.lf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderLookbook(btn.dataset.f);
+}
+
+function renderLookbook(filter = 'all') {
+  const grid = document.getElementById('lookbook-grid');
+  grid.innerHTML = '';
+  let res = filter === 'all' ? db : db.filter(o => o.occ === filter);
+  res.forEach(item => grid.innerHTML += buildOutfitCard(item));
+}
+
+/* --- SAVED LOOKS --- */
+function getSavedIds() {
+  return savedLookIds;
+}
+
+async function toggleSave(id) {
+  if(savedLookIds.includes(id)) {
+    savedLookIds = savedLookIds.filter(x => x !== id);
+    showToast("Removed from Favourites");
+    await fetch(`http://localhost:3000/api/saved/${id}`, { method: 'DELETE' });
+  } else {
+    savedLookIds.push(id);
+    showToast("Saved to Favourites ❤️");
+    await fetch('http://localhost:3000/api/saved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outfitId: id })
+    });
+  }
+  updateSaveBtns();
+  if(document.getElementById('tab-saved').classList.contains('active')) renderSaved();
+  updateBadge();
+}
+
+function renderSaved() {
+  const grid = document.getElementById('saved-grid');
+  const saved = getSavedIds();
+  grid.innerHTML = '';
+  if(saved.length === 0) {
+    grid.innerHTML = `<div class="saved-empty" style="grid-column:1/-1"><div class="se-icon">💔</div><h3>No looks saved yet</h3><p style="margin-top:8px">Browse the Lookbook or Suggestions to save some outfits!</p></div>`;
+    return;
+  }
+  
+  const items = db.filter(o => saved.includes(o.id));
+  items.forEach(item => grid.innerHTML += buildOutfitCard(item));
+}
+
+function updateSaveBtns() {
+  const saved = getSavedIds();
+  document.querySelectorAll('.btn-save').forEach(btn => {
+    const id = btn.dataset.id;
+    if(saved.includes(id)) {
+      btn.innerHTML = '❤️ Saved';
+      btn.classList.add('btn-primary');
+      btn.classList.remove('btn-secondary');
+    } else {
+      btn.innerHTML = '🤍 Save';
+      btn.classList.add('btn-secondary');
+      btn.classList.remove('btn-primary');
+    }
+  });
+}
+
+function updateBadge() {
+  const c = getSavedIds().length;
+  const b = document.getElementById('saved-count');
+  if(c > 0) {
+    b.style.display = 'block';
+    b.innerText = `${c} saved`;
+  } else {
+    b.style.display = 'none';
+  }
+}
+
+/* --- RENDER CARD --- */
+function buildOutfitCard(o) {
+  const cDots = o.c.map(hex => `<div class="cdot" style="background:${hex}"></div>`).join('');
+  const items = o.i.map(it => `<span class="item-chip">${it}</span>`).join('');
+  const isSaved = getSavedIds().includes(o.id);
+  const btnClass = isSaved ? 'btn-primary' : 'btn-secondary';
+  const btnText = isSaved ? '❤️ Saved' : '🤍 Save';
+  
+  return `
+    <div class="outfit-card">
+      <div class="outfit-img">
+        <div class="grad" style="background:linear-gradient(to bottom, transparent, rgba(0,0,0,0.4))"></div>
+        ${o.img}
+        <span class="outfit-tag">${o.occ.toUpperCase()}</span>
+      </div>
+      <div class="outfit-info">
+        <div class="outfit-name">${o.n}</div>
+        <div class="color-dots">${cDots}</div>
+        <div class="outfit-items">${items}</div>
+        <div class="outfit-actions">
+          <button class="btn btn-sm btn-save ${btnClass}" data-id="${o.id}" onclick="toggleSave('${o.id}')" style="flex:1">${btnText}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// init
+async function initApp() {
+  await Promise.all([fetchDb(), fetchSaved()]);
+}
+initApp();
+</script>
+</body>
+</html>

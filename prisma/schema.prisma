@@ -1,0 +1,24 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Outfit {
+  id      String   @id
+  occ     String
+  g       String
+  s       String
+  img     String
+  n       String
+  i       String
+  c       String
+}
+
+model SavedLook {
+  id        String   @id @default(uuid())
+  outfitId  String   @unique
+}

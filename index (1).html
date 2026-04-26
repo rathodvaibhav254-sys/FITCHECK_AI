@@ -333,7 +333,7 @@ let savedLookIds = [];
 
 async function fetchDb() {
   try {
-    const res = await fetch('http://localhost:3000/api/outfits');
+    const res = await fetch('/api/outfits');
     db = await res.json();
     renderLookbook();
   } catch (e) {
@@ -343,7 +343,7 @@ async function fetchDb() {
 
 async function fetchSaved() {
   try {
-    const res = await fetch('http://localhost:3000/api/saved');
+    const res = await fetch('/api/saved');
     savedLookIds = await res.json();
     updateBadge();
     updateSaveBtns();
@@ -681,11 +681,11 @@ async function toggleSave(id) {
   if(savedLookIds.includes(id)) {
     savedLookIds = savedLookIds.filter(x => x !== id);
     showToast("Removed from Favourites");
-    await fetch(`http://localhost:3000/api/saved/${id}`, { method: 'DELETE' });
+    await fetch(`/api/saved/${id}`, { method: 'DELETE' });
   } else {
     savedLookIds.push(id);
     showToast("Saved to Favourites ❤️");
-    await fetch('http://localhost:3000/api/saved', {
+    await fetch('/api/saved', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ outfitId: id })

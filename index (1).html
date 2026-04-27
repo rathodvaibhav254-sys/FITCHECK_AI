@@ -685,79 +685,74 @@ function getSuggestions() {
   });
 }
 
+function getCategoryLabel(category) {
+  const labels = {
+    'T-Shirt': ['Crewneck Tee', 'Graphic Tee', 'Striped Top', 'Ribbed Tee', 'Relaxed Tee'],
+    'Hoodie': ['Pullover Hoodie', 'Zip-up Hoodie', 'Fleece Hoodie', 'Cropped Hoodie', 'Layered Hoodie'],
+    'Pants': ['Tailored Pants', 'Slim Jeans', 'Chinos', 'Cargo Pants', 'High-waisted Trousers'],
+    'Shoes': ['White Sneakers', 'Chelsea Boots', 'Loafers', 'Strappy Sandals', 'Dress Shoes'],
+    'Accessories': ['Leather Belt', 'Statement Necklace', 'Sunglasses', 'Watch', 'Clutch Bag'],
+    'formal': ['Blazer', 'Suit Jacket', 'Sheath Dress', 'Silk Blouse', 'Dress Shirt']
+  };
+  const options = labels[category] || [category];
+  return options[Math.floor(Math.random() * options.length)];
+}
+
 function generateRandomOutfit(occ, g, s) {
-  // Smart category selection based on season and occasion
   const categoryWeights = getCategoryWeights(occ, s);
-  
-  // Get allowed categories (exclude those with weight 0)
   const allowedCategories = Object.keys(imageCategories).filter(cat => categoryWeights[cat] > 0);
-  
-  // Create weights object for allowed categories only
-  const allowedWeights = {};
-  allowedCategories.forEach(cat => {
-    allowedWeights[cat] = categoryWeights[cat];
-  });
-  
-  // Select categories based on weights
-  const selectedCategories = [];
-  
-  // Always include 3-4 items
-  const numItems = Math.floor(Math.random() * 2) + 3;
-  
-  for (let i = 0; i < numItems; i++) {
-    const category = allowedCategories[Math.floor(Math.random() * allowedCategories.length)];
-    if (!selectedCategories.includes(category)) {
-      selectedCategories.push(category);
-    }
+
+  const selectedCategories = new Set();
+  const numItems = Math.min(4, Math.max(3, Math.floor(Math.random() * 2) + 3));
+
+  while (selectedCategories.size < numItems && allowedCategories.length > 0) {
+    const category = weightedRandomSelect(allowedCategories, categoryWeights);
+    selectedCategories.add(category);
   }
-  
-  // If we don't have enough unique categories, fill with random ones from allowed
-  while (selectedCategories.length < numItems && allowedCategories.length > 0) {
-    const randomCategory = allowedCategories[Math.floor(Math.random() * allowedCategories.length)];
-    if (!selectedCategories.includes(randomCategory)) {
-      selectedCategories.push(randomCategory);
-    }
+
+  if (['party','date','formal','wedding','festive'].includes(occ) && !selectedCategories.has('formal')) {
+    selectedCategories.delete([...selectedCategories][0]);
+    selectedCategories.add('formal');
   }
-  
-  // Select images for each category
+
+  if (selectedCategories.has('formal') && selectedCategories.size < numItems && allowedCategories.includes('Accessories')) {
+    selectedCategories.add('Accessories');
+  }
+
   const selectedImages = [];
   const selectedItems = [];
-  
   selectedCategories.forEach(cat => {
-    const images = imageCategories[cat];
+    const images = imageCategories[cat] || [];
     const randomImage = images[Math.floor(Math.random() * images.length)];
-    selectedImages.push(`./images/${randomImage}`);
-    selectedItems.push(cat);
+    if (randomImage) selectedImages.push(`images/${randomImage}`);
+    selectedItems.push(getCategoryLabel(cat));
   });
-  
-  // Generate random colors
+
   const colors = [];
   for (let i = 0; i < 3; i++) {
-    colors.push('#' + Math.floor(Math.random()*16777215).toString(16));
+    colors.push('#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'));
   }
-  
-  // Generate outfit name based on occasion
+
   const names = {
     casual: ['Relaxed Vibes', 'Weekend Comfort', 'Easy Going', 'Chill Mode'],
     college: ['Campus Style', 'Study Session', 'Lecture Ready', 'Student Life'],
-    party: ['Night Out', 'Party Ready', 'Club Scene', 'Festive Mood'],
+    party: ['Night Out', 'Party Ready', 'Club Scene', 'Festive Glam'],
     outing: ['Adventure Ready', 'Travel Style', 'Outdoor Fun', 'Explorer'],
-    formal: ['Professional Look', 'Business Attire', 'Executive Style', 'Corporate'],
+    formal: ['Professional Look', 'Business Attire', 'Executive Style', 'Corporate Edge'],
     date: ['Romantic Evening', 'Date Night', 'Special Occasion', 'Dinner Date'],
     wedding: ['Wedding Guest', 'Ceremony Ready', 'Elegant Affair', 'Festive Event'],
     festive: ['Cultural Celebration', 'Traditional Wear', 'Festival Style', 'Holiday Spirit'],
     gym: ['Workout Gear', 'Fitness Ready', 'Gym Session', 'Active Wear'],
     beach: ['Beach Day', 'Summer Vibes', 'Coastal Style', 'Resort Wear']
   };
-  
+
   const outfitNames = names[occ] || ['Stylish Look'];
   const randomName = outfitNames[Math.floor(Math.random() * outfitNames.length)];
-  
-  // Create image collage HTML
-  const imageCollage = selectedImages.map(img => 
+
+  const imageCollage = selectedImages.map(img =>
     `<img src="${img}" alt="Outfit item" style="width: 48%; height: 48%; object-fit: cover; border-radius: 6px; margin: 1%;">`
   ).join('');
-  
+
   return {
     id: `suggestion_${Date.now()}_${Math.random()}`,
     occ: occ,
@@ -771,7 +766,6 @@ function generateRandomOutfit(occ, g, s) {
 }
 
 function getCategoryWeights(occasion, season) {
-  // Base weights for all categories
   const weights = {
     'T-Shirt': 1,
     'Hoodie': 1,
@@ -808,11 +802,21 @@ function getCategoryWeights(occasion, season) {
       break;
       
     case 'party':
-    case 'date':
-      weights['T-Shirt'] = 2; // Stylish tops
-      weights['formal'] = 1.5; // Some formal elements
+      weights['T-Shirt'] = 0; // No casual tees
+      weights['Hoodie'] = 0; // No hoodies
+      weights['formal'] = 3; // Party-ready formal pieces
       weights['Accessories'] = 2; // Party accessories
       weights['Shoes'] = 2; // Nice shoes
+      weights['Pants'] = 2; // Dress pants
+      break;
+
+    case 'date':
+      weights['T-Shirt'] = 0; // No casual tees
+      weights['Hoodie'] = 0; // No hoodies
+      weights['formal'] = 3; // Date night formal styling
+      weights['Accessories'] = 2; // Polished accessories
+      weights['Shoes'] = 2; // Dress shoes
+      weights['Pants'] = 2; // Tailored pants
       break;
       
     case 'outing':
@@ -862,9 +866,11 @@ function getCategoryWeights(occasion, season) {
       break;
       
     case 'festive':
-      weights['formal'] = 2; // Traditional wear
+      weights['formal'] = 3; // Traditional wear
       weights['Accessories'] = 3; // Festive accessories
-      weights['T-Shirt'] = 1; // Some modern elements
+      weights['Shoes'] = 2; // Dress shoes
+      weights['T-Shirt'] = 0; // No casual tees
+      weights['Hoodie'] = 0; // No hoodies
       break;
   }
   
